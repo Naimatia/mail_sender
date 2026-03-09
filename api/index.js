@@ -65,7 +65,7 @@ app.post("/send-email", async (req, res) => {
           
           <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
             <tr><td style="padding: 8px; font-weight: bold;">Name:</td><td>${name}</td></tr>
-            <tr><td style="padding: 8px; font-weight: bold;">Email:</td><td><a href="mailto:$$   {email}">   $${email}</a></td></tr>
+            <tr><td style="padding: 8px; font-weight: bold;">Email:</td><td>${email}</td></tr>
             <tr><td style="padding: 8px; font-weight: bold;">Phone:</td><td>${phone}</td></tr>
             <tr><td style="padding: 8px; font-weight: bold;">Subject:</td><td>${subject || "—"}</td></tr>
           </table>
