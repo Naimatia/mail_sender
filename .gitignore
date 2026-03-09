@@ -1,0 +1,21 @@
+# -------------------------------
+# Node.js / npm / Yarn / pnpm
+# -------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json    # optional: keep if you use npm lockfile, remove if you prefer yarn/pnpm only
+yarn.lock            # optional: keep if you use yarn, remove if npm only
+pnpm-lock.yaml       # optional
+
+# -------------------------------
+# Build / dist / output folders
+# -------------------------------
+dist/
+build/
+out/
+.next/
+.vercel/
+.output/
