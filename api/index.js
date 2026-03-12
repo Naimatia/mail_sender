@@ -2,6 +2,8 @@ const express = require("express");
 const nodemailer = require("nodemailer");
 const cors = require("cors");
 const bodyParser = require("body-parser");
+const multer = require("multer");
+
 // No dotenv here — Vercel injects env vars automatically
 
 const app = express();
@@ -24,6 +26,15 @@ const transporter = nodemailer.createTransport({
     minVersion: "TLSv1.2"
   }
 });
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    files: 5,                 // max 5 files
+    fileSize: 10 * 1024 * 1024 // 10MB per file
+  }
+});
+
 
 // Optional: log connection status (useful in Vercel logs)
 transporter.verify((error, success) => {
@@ -91,6 +102,48 @@ app.post("/send-email", async (req, res) => {
     });
   }
 });
+
+app.post("/send-files", upload.array("files", 5), async (req, res) => {
+  const files = req.files;
+
+  if (!files || files.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "No files uploaded"
+    });
+  }
+
+  try {
+    const attachments = files.map(file => ({
+      filename: file.originalname,
+      content: file.buffer
+    }));
+
+    await transporter.sendMail({
+      from: `"Bardawil File Upload" <${process.env.SMTP_USER}>`,
+      to: process.env.SMTP_USER,
+      subject: `New File Upload (${files.length} file${files.length > 1 ? "s" : ""})`,
+      html: `
+        <h2>New Files Uploaded</h2>
+        <p>${files.length} file(s) were uploaded from the website.</p>
+      `,
+      attachments: attachments
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Files sent successfully"
+    });
+
+  } catch (err) {
+    console.error("File send error:", err.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to send files"
+    });
+  }
+});
+
 
 // Important: Export the app for Vercel
 module.exports = app;
