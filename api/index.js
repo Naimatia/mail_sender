@@ -30,23 +30,24 @@ const upload = multer({
   }
 });
 
-// Email transporter - FIXED with correct Spacemail settings
+// Email transporter - FIXED SSL configuration
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "mail.spacemail.com",  // Changed from mail.privateemail.com
-  port: Number(process.env.SMTP_PORT) || 465,          // Changed to 465
-  secure: process.env.SMTP_SECURE === "true" || true,  // Changed to true for port 465
+  host: process.env.SMTP_HOST || "mail.spacemail.com",
+  port: Number(process.env.SMTP_PORT) || 587,  // Changed back to 587
+  secure: false,  // false for 587 (STARTTLS)
   auth: {
     user: process.env.SMTP_USER || "manager@bardawil-luxury-properties.com",
     pass: process.env.SMTP_PASS || "Bardawil@2026",
   },
   tls: {
-    rejectUnauthorized: false,  // Set to false for testing, change to true in production
-    minVersion: "TLSv1.2"
+    rejectUnauthorized: false,
+    ciphers: 'SSLv3',
+    minVersion: 'TLSv1'
   },
-  // Add connection timeout settings
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 20000
+  requireTLS: true,
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 30000
 });
 
 // Verify transporter
@@ -184,7 +185,7 @@ app.get("/health", (req, res) => {
     status: "OK", 
     timestamp: new Date().toISOString(),
     smtp_host: process.env.SMTP_HOST || "mail.spacemail.com",
-    smtp_port: process.env.SMTP_PORT || 465,
+    smtp_port: process.env.SMTP_PORT || 587,
     smtp_user: process.env.SMTP_USER || "manager@bardawil-luxury-properties.com"
   });
 });
