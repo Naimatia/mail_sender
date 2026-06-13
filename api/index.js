@@ -1,24 +1,42 @@
 const express = require("express");
 const nodemailer = require("nodemailer");
 const cors = require("cors");
-const bodyParser = require("body-parser");
 const multer = require("multer");
-
-// No dotenv here — Vercel injects env vars automatically
+const path = require("path");
 
 const app = express();
 
-// Middleware (order matters)
-app.use(cors());                    // Allows frontend requests
-app.use(bodyParser.json());
+// Middleware
+app.use(cors());
+app.use(express.json());
 
-// Transporter (uses Vercel env vars)
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    files: 5,
+    fileSize: 10 * 1024 * 1024 // 10MB
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only images, PDF, and DOC files are allowed'));
+    }
+  }
+});
+
+// Email transporter
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "mail.privateemail.com",
   port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === "true" || false,  // true for 465, false for 587
+  secure: process.env.SMTP_SECURE === "true" || false,
   auth: {
-    user: process.env.SMTP_USER,
+    user: process.env.SMTP_USER || "manager@bardawil-luxury-properties.com",
     pass: process.env.SMTP_PASS,
   },
   tls: {
@@ -27,16 +45,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    files: 5,                 // max 5 files
-    fileSize: 10 * 1024 * 1024 // 10MB per file
-  }
-});
-
-
-// Optional: log connection status (useful in Vercel logs)
+// Verify transporter
 transporter.verify((error, success) => {
   if (error) {
     console.error("SMTP verification failed:", error);
@@ -45,105 +54,134 @@ transporter.verify((error, success) => {
   }
 });
 
-// Your endpoint
-app.post("/send-email", async (req, res) => {
-  const { name, email, phone, subject, message } = req.body;
+// Single endpoint for sending inquiry with files in same email
+app.post("/send-inquiry", upload.array("files", 5), async (req, res) => {
+  const { name, email, phone, message } = req.body;
+  const files = req.files || [];
 
-  if (!name || !email || !phone || !message) {
+  // Validate required fields
+  if (!name || !name.trim()) {
     return res.status(400).json({
       success: false,
-      message: "Missing required fields (name, email, phone, message)"
-    });
-  }
-
-  if (!email.includes("@") || !email.includes(".")) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid email format"
+      message: "Name is required"
     });
   }
 
   try {
-    await transporter.sendMail({
-      from: `"Bardawil Contact Form" <${process.env.SMTP_USER}>`,
-      to: process.env.SMTP_USER,
-      replyTo: email,
-      subject: subject || `New Contact from ${name}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-          <h2 style="color: #1a1a1a;">New Message Received</h2>
-          <p>A visitor submitted the following via your website:</p>
-          
-          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-            <tr><td style="padding: 8px; font-weight: bold;">Name:</td><td>${name}</td></tr>
-            <tr><td style="padding: 8px; font-weight: bold;">Email:</td><td>${email}</td></tr>
-            <tr><td style="padding: 8px; font-weight: bold;">Phone:</td><td>${phone}</td></tr>
-            <tr><td style="padding: 8px; font-weight: bold;">Subject:</td><td>${subject || "—"}</td></tr>
-          </table>
-          
-          <h3 style="margin-top: 24px; color: #444;">Message:</h3>
-          <div style="white-space: pre-wrap; background: #f9f9f9; padding: 16px; border-left: 4px solid #2563eb;">
-            ${message.replace(/\n/g, "<br>")}
-          </div>
-          
-          <p style="margin-top: 32px; font-size: 14px; color: #666;">
-            Reply directly to this email or use the phone number above.
-          </p>
-        </div>
-      `,
-    });
-
-    res.status(200).json({ success: true, message: "Email sent successfully" });
-  } catch (err) {
-    console.error("Email send error:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to send email. Please try again later."
-    });
-  }
-});
-
-app.post("/send-files", upload.array("files", 5), async (req, res) => {
-  const files = req.files;
-
-  if (!files || files.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "No files uploaded"
-    });
-  }
-
-  try {
+    // Prepare attachments if files exist
     const attachments = files.map(file => ({
       filename: file.originalname,
-      content: file.buffer
+      content: file.buffer,
+      contentType: file.mimetype
     }));
 
-    await transporter.sendMail({
-      from: `"Bardawil File Upload" <${process.env.SMTP_USER}>`,
-      to: process.env.SMTP_USER,
-      subject: `New File Upload (${files.length} file${files.length > 1 ? "s" : ""})`,
-      html: `
-        <h2>New Files Uploaded</h2>
-        <p>${files.length} file(s) were uploaded from the website.</p>
-      `,
-      attachments: attachments
-    });
+    // Create file list for email body
+    const fileListHtml = files.length > 0 ? `
+      <div style="background: #e8f0fe; padding: 15px; border-radius: 6px; margin: 20px 0;">
+        <h3 style="margin: 0 0 10px 0; color: #2563eb;">📎 Attached Files (${files.length})</h3>
+        <ul style="margin: 0; padding-left: 20px;">
+          ${files.map(file => `
+            <li style="margin: 5px 0;">
+              <strong>${file.originalname}</strong> (${(file.size / 1024 / 1024).toFixed(2)} MB)
+            </li>
+          `).join('')}
+        </ul>
+        <p style="margin: 10px 0 0 0; font-size: 13px; color: #666;">
+          These files are attached to this email.
+        </p>
+      </div>
+    ` : '';
 
-    res.status(200).json({
-      success: true,
-      message: "Files sent successfully"
-    });
+    // Email content
+    const emailContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #1a1a1a; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">
+          📬 New Inquiry Received
+        </h2>
+        
+        <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #2563eb;">Contact Information</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; width: 120px;">Name:</td>
+              <td style="padding: 8px 0;">${escapeHtml(name)}</td>
+            </tr>
+            ${email ? `
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold;">Email:</td>
+              <td style="padding: 8px 0;">
+                <a href="mailto:${email}" style="color: #2563eb;">${email}</a>
+              </td>
+            </tr>
+            ` : ''}
+            ${phone ? `
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold;">Phone:</td>
+              <td style="padding: 8px 0;">
+                <a href="tel:${phone}" style="color: #2563eb;">${phone}</a>
+              </td>
+            </tr>
+            ` : ''}
+          </table>
+        </div>
+        
+        ${message ? `
+        <div style="margin: 20px 0;">
+          <h3 style="color: #2563eb;">Message:</h3>
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 6px; border-left: 4px solid #2563eb;">
+            ${escapeHtml(message).replace(/\n/g, "<br>")}
+          </div>
+        </div>
+        ` : ''}
+        
+        ${fileListHtml}
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #999;">
+          <p>This inquiry was sent from the Bardawil Luxury Properties website contact form.</p>
+          <p>Reply directly to this email to respond to the customer.</p>
+        </div>
+      </div>
+    `;
 
+    // Send single email with all data and attachments
+    const mailOptions = {
+      from: `"Bardawil Luxury Properties" <${process.env.SMTP_USER}>`,
+      to: "manager@bardawil-luxury-properties.com",
+      replyTo: email || process.env.SMTP_USER,
+      subject: `New Inquiry from ${name}${files.length > 0 ? ` (with ${files.length} attachment${files.length > 1 ? 's' : ''})` : ''}`,
+      html: emailContent,
+      attachments: attachments // Files attached to the same email
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Inquiry sent successfully with files" 
+    });
   } catch (err) {
-    console.error("File send error:", err.message);
+    console.error("Email send error:", err);
     res.status(500).json({
       success: false,
-      message: "Failed to send files"
+      message: "Failed to send inquiry. Please try again later."
     });
   }
 });
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
+});
 
-// Important: Export the app for Vercel
+// Helper function to escape HTML
+function escapeHtml(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 module.exports = app;
