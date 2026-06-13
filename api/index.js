@@ -30,19 +30,23 @@ const upload = multer({
   }
 });
 
-// Email transporter
+// Email transporter - FIXED with correct Spacemail settings
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "mail.privateemail.com",
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === "true" || false,
+  host: process.env.SMTP_HOST || "mail.spacemail.com",  // Changed from mail.privateemail.com
+  port: Number(process.env.SMTP_PORT) || 465,          // Changed to 465
+  secure: process.env.SMTP_SECURE === "true" || true,  // Changed to true for port 465
   auth: {
     user: process.env.SMTP_USER || "manager@bardawil-luxury-properties.com",
-    pass: process.env.SMTP_PASS,
+    pass: process.env.SMTP_PASS || "Bardawil@2026",
   },
   tls: {
-    rejectUnauthorized: true,
+    rejectUnauthorized: false,  // Set to false for testing, change to true in production
     minVersion: "TLSv1.2"
-  }
+  },
+  // Add connection timeout settings
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 20000
 });
 
 // Verify transporter
@@ -50,7 +54,7 @@ transporter.verify((error, success) => {
   if (error) {
     console.error("SMTP verification failed:", error);
   } else {
-    console.log("SMTP connection ready");
+    console.log("✅ SMTP connection ready - Authenticated as:", process.env.SMTP_USER || "manager@bardawil-luxury-properties.com");
   }
 });
 
@@ -58,6 +62,9 @@ transporter.verify((error, success) => {
 app.post("/send-inquiry", upload.array("files", 5), async (req, res) => {
   const { name, email, phone, message } = req.body;
   const files = req.files || [];
+
+  console.log("📬 Received inquiry from:", name);
+  console.log("📎 Files count:", files.length);
 
   // Validate required fields
   if (!name || !name.trim()) {
@@ -82,7 +89,7 @@ app.post("/send-inquiry", upload.array("files", 5), async (req, res) => {
         <ul style="margin: 0; padding-left: 20px;">
           ${files.map(file => `
             <li style="margin: 5px 0;">
-              <strong>${file.originalname}</strong> (${(file.size / 1024 / 1024).toFixed(2)} MB)
+              <strong>${escapeHtml(file.originalname)}</strong> (${(file.size / 1024 / 1024).toFixed(2)} MB)
             </li>
           `).join('')}
         </ul>
@@ -145,32 +152,41 @@ app.post("/send-inquiry", upload.array("files", 5), async (req, res) => {
 
     // Send single email with all data and attachments
     const mailOptions = {
-      from: `"Bardawil Luxury Properties" <${process.env.SMTP_USER}>`,
+      from: `"Bardawil Luxury Properties" <${process.env.SMTP_USER || "manager@bardawil-luxury-properties.com"}>`,
       to: "manager@bardawil-luxury-properties.com",
-      replyTo: email || process.env.SMTP_USER,
+      replyTo: email || process.env.SMTP_USER || "manager@bardawil-luxury-properties.com",
       subject: `New Inquiry from ${name}${files.length > 0 ? ` (with ${files.length} attachment${files.length > 1 ? 's' : ''})` : ''}`,
       html: emailContent,
-      attachments: attachments // Files attached to the same email
+      attachments: attachments
     };
 
-    await transporter.sendMail(mailOptions);
+    console.log("📧 Sending email to manager@bardawil-luxury-properties.com");
+    const info = await transporter.sendMail(mailOptions);
+    console.log("✅ Email sent successfully:", info.messageId);
 
     res.status(200).json({ 
       success: true, 
       message: "Inquiry sent successfully with files" 
     });
   } catch (err) {
-    console.error("Email send error:", err);
+    console.error("❌ Email send error:", err);
     res.status(500).json({
       success: false,
-      message: "Failed to send inquiry. Please try again later."
+      message: "Failed to send inquiry. Please try again later.",
+      error: err.message
     });
   }
 });
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: "OK", 
+    timestamp: new Date().toISOString(),
+    smtp_host: process.env.SMTP_HOST || "mail.spacemail.com",
+    smtp_port: process.env.SMTP_PORT || 465,
+    smtp_user: process.env.SMTP_USER || "manager@bardawil-luxury-properties.com"
+  });
 });
 
 // Helper function to escape HTML
