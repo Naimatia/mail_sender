@@ -9,65 +9,31 @@ const path = require("path");
 const app = express();
 
 // ============================================
-// FIXED CORS CONFIGURATION
+// FIXED CORS CONFIGURATION - Must be FIRST
 // ============================================
 
-// Define allowed origins
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'https://orbrex365.com',
-  'https://www.orbrex365.com',
-  'https://bardawil-luxury-properties.com',
-  'https://bardawil-luxury-properties.vercel.app',
-  'https://mail-sender-bardawil.vercel.app',
-  'https://*.vercel.app'
-];
+// Disable x-powered-by for security
+app.disable('x-powered-by');
 
-// CORS middleware with proper configuration
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Check if origin is allowed
-    const isAllowed = allowedOrigins.some(allowed => {
-      // Handle wildcard subdomains
-      if (allowed.includes('*')) {
-        const pattern = '^' + allowed.replace('*', '.*') + '$';
-        return new RegExp(pattern).test(origin);
-      }
-      return allowed === origin;
-    });
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.warn('CORS blocked for origin:', origin);
-      // For development, allow all origins
-      if (process.env.NODE_ENV === 'development') {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Origin'],
-  credentials: true,
-  optionsSuccessStatus: 200,
-  preflightContinue: false
-}));
-
-// Handle preflight requests explicitly for all routes
-app.options('*', (req, res) => {
+// Custom CORS middleware that handles everything
+app.use((req, res, next) => {
+  // Get the origin from the request
   const origin = req.headers.origin || '*';
+  
+  // Set CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Origin, X-CSRF-Token');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
-  res.status(200).end();
+  
+  // Handle preflight requests immediately
+  if (req.method === 'OPTIONS') {
+    console.log('🔄 OPTIONS request received for:', req.path);
+    return res.status(200).end();
+  }
+  
+  next();
 });
 
 // Middleware
@@ -83,7 +49,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================
-// HEALTH CHECK ENDPOINT
+// HEALTH CHECK ENDPOINT - MUST BE BEFORE ANY REDIRECT
 // ============================================
 app.get("/health", (req, res) => {
   res.status(200).json({ 
@@ -91,19 +57,20 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'production',
     cors_enabled: true,
-    allowed_origins: allowedOrigins
+    node_version: process.version
   });
 });
 
 // ============================================
-// TEST CORS ENDPOINT
+// TEST CORS ENDPOINT - MUST BE BEFORE ANY REDIRECT
 // ============================================
 app.get("/test-cors", (req, res) => {
-  res.json({ 
+  res.status(200).json({ 
     success: true, 
     message: "CORS is working!", 
     origin: req.headers.origin || 'no origin',
-    method: req.method
+    method: req.method,
+    headers: req.headers
   });
 });
 
@@ -874,16 +841,15 @@ app.post("/send-inquiry", upload.array("files", 5), async (req, res) => {
   }
 });
 
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.status(200).json({ 
-    status: "OK", 
-    timestamp: new Date().toISOString(),
-    smtp_host: process.env.SMTP_HOST || "mail.spacemail.com",
-    smtp_port: process.env.SMTP_PORT || 587,
-    smtp_user: "contact@bardawil-luxury-properties.com",
-    cors_enabled: true
-  });
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not Found' });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
 module.exports = app;
