@@ -36,7 +36,7 @@ const transporter = nodemailer.createTransport({
   port: Number(process.env.SMTP_PORT) || 587,  // Changed back to 587
   secure: false,  // false for 587 (STARTTLS)
   auth: {
-    user: process.env.SMTP_USER || "manager@bardawil-luxury-properties.com",
+    user: process.env.SMTP_USER || "contact@bardawil-luxury-properties.com",
     pass: process.env.SMTP_PASS || "Bardawil@2026",
   },
   tls: {
