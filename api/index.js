@@ -32,7 +32,7 @@ const upload = multer({
 });
 
 // Email transporter - Configured for Spacemail
-const transporter = nodemailer.createTransporter({
+const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "mail.spacemail.com",
   port: Number(process.env.SMTP_PORT) || 587,
   secure: false, // false for 587 (STARTTLS)
