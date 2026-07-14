@@ -1,4 +1,4 @@
-// server.js - Complete updated file
+// server.js - Complete updated file with your email settings
 const express = require("express");
 const nodemailer = require("nodemailer");
 const cors = require("cors");
@@ -31,11 +31,11 @@ const upload = multer({
   }
 });
 
-// Email transporter - FIXED SSL configuration
+// Email transporter - Configured for Spacemail
 const transporter = nodemailer.createTransporter({
   host: process.env.SMTP_HOST || "mail.spacemail.com",
   port: Number(process.env.SMTP_PORT) || 587,
-  secure: false,
+  secure: false, // false for 587 (STARTTLS)
   auth: {
     user: process.env.SMTP_USER || "contact@bardawil-luxury-properties.com",
     pass: process.env.SMTP_PASS || "Bardawil@2026",
@@ -54,9 +54,9 @@ const transporter = nodemailer.createTransporter({
 // Verify transporter
 transporter.verify((error, success) => {
   if (error) {
-    console.error("SMTP verification failed:", error);
+    console.error("❌ SMTP verification failed:", error);
   } else {
-    console.log("✅ SMTP connection ready - Authenticated as:", process.env.SMTP_USER || "contact@bardawil-luxury-properties.com");
+    console.log("✅ SMTP connection ready - Sending from: contact@bardawil-luxury-properties.com");
   }
 });
 
@@ -82,14 +82,15 @@ app.post("/send-meeting-notification", async (req, res) => {
         const emailContent = generateMeetingEmail(meeting, recipient, action);
         
         const mailOptions = {
-          from: `"Bardawil Luxury Properties" <${process.env.SMTP_USER || "contact@bardawil-luxury-properties.com"}>`,
+          from: `"Bardawil Luxury Properties" <contact@bardawil-luxury-properties.com>`,
           to: recipient.email,
-          replyTo: process.env.SMTP_USER || "contact@bardawil-luxury-properties.com",
+          replyTo: "contact@bardawil-luxury-properties.com",
           subject: emailContent.subject,
           html: emailContent.html,
           text: emailContent.text
         };
 
+        console.log(`📧 Sending to: ${recipient.email}`);
         const info = await transporter.sendMail(mailOptions);
         console.log(`✅ Email sent to ${recipient.email}:`, info.messageId);
         
@@ -142,14 +143,15 @@ app.post("/send-meeting-reminders", async (req, res) => {
           const emailContent = generateMeetingEmail(meeting, recipient, 'reminder');
           
           const mailOptions = {
-            from: `"Bardawil Luxury Properties" <${process.env.SMTP_USER || "contact@bardawil-luxury-properties.com"}>`,
+            from: `"Bardawil Luxury Properties" <contact@bardawil-luxury-properties.com>`,
             to: recipient.email,
-            replyTo: process.env.SMTP_USER || "contact@bardawil-luxury-properties.com",
+            replyTo: "contact@bardawil-luxury-properties.com",
             subject: emailContent.subject,
             html: emailContent.html,
             text: emailContent.text
           };
 
+          console.log(`⏰ Sending reminder to: ${recipient.email}`);
           const info = await transporter.sendMail(mailOptions);
           allResults.push({
             meetingId: meeting.id,
@@ -202,14 +204,15 @@ app.post("/send-bulk-meeting-notifications", async (req, res) => {
           const emailContent = generateMeetingEmail(meeting, recipient, action);
           
           const mailOptions = {
-            from: `"Bardawil Luxury Properties" <${process.env.SMTP_USER || "contact@bardawil-luxury-properties.com"}>`,
+            from: `"Bardawil Luxury Properties" <contact@bardawil-luxury-properties.com>`,
             to: recipient.email,
-            replyTo: process.env.SMTP_USER || "contact@bardawil-luxury-properties.com",
+            replyTo: "contact@bardawil-luxury-properties.com",
             subject: emailContent.subject,
             html: emailContent.html,
             text: emailContent.text
           };
 
+          console.log(`📨 Sending bulk to: ${recipient.email}`);
           const info = await transporter.sendMail(mailOptions);
           allResults.push({
             meetingId: meeting.id,
@@ -238,6 +241,90 @@ app.post("/send-bulk-meeting-notifications", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to send bulk notifications",
+      error: err.message
+    });
+  }
+});
+
+/**
+ * Send test email to verify configuration
+ */
+app.post("/send-test-email", async (req, res) => {
+  const { to } = req.body;
+
+  console.log("🧪 Sending test email to:", to);
+
+  try {
+    const mailOptions = {
+      from: `"Bardawil Luxury Properties" <contact@bardawil-luxury-properties.com>`,
+      to: to || "atianaim@gmail.com",
+      replyTo: "contact@bardawil-luxury-properties.com",
+      subject: "✅ Test Email - Bardawil Luxury Properties",
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="margin: 0;">🏢 Bardawil Luxury Properties</h1>
+            <p style="margin: 5px 0 0; opacity: 0.9;">Meeting Notification System</p>
+          </div>
+          
+          <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
+            <h2 style="color: #1a1a2e; margin-top: 0;">✅ Test Email Successful!</h2>
+            <p>This is a test email to verify that the meeting notification system is working properly.</p>
+            
+            <div style="background: #e8f0fe; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 0; color: #2563eb;">
+                <strong>📧 From:</strong> contact@bardawil-luxury-properties.com<br>
+                <strong>📧 To:</strong> ${to || "atianaim@gmail.com"}<br>
+                <strong>🕐 Time:</strong> ${new Date().toLocaleString()}
+              </p>
+            </div>
+            
+            <p style="color: #666;">The meeting notification system is ready to send meeting invitations, updates, and reminders to your team.</p>
+            
+            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin-top: 20px;">
+              <p style="margin: 0; font-size: 14px; color: #856404;">
+                💡 Next steps: Create a meeting to send notifications to all participants.
+              </p>
+            </div>
+          </div>
+          
+          <div style="margin-top: 20px; text-align: center; color: #999; font-size: 12px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p style="margin: 0;">© ${new Date().getFullYear()} Bardawil Luxury Properties</p>
+            <p style="margin: 0;">contact@bardawil-luxury-properties.com</p>
+          </div>
+        </div>
+      `,
+      text: `
+Test Email - Bardawil Luxury Properties
+
+This is a test email to verify that the meeting notification system is working properly.
+
+From: contact@bardawil-luxury-properties.com
+To: ${to || "atianaim@gmail.com"}
+Time: ${new Date().toLocaleString()}
+
+The meeting notification system is ready to send meeting invitations, updates, and reminders to your team.
+
+---
+Bardawil Luxury Properties
+contact@bardawil-luxury-properties.com
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("✅ Test email sent:", info.messageId);
+
+    res.status(200).json({
+      success: true,
+      message: "Test email sent successfully",
+      messageId: info.messageId,
+      to: to || "atianaim@gmail.com"
+    });
+  } catch (err) {
+    console.error("❌ Error sending test email:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to send test email",
       error: err.message
     });
   }
@@ -570,10 +657,9 @@ function escapeHtml(text) {
 }
 
 // ============================================
-// EXISTING ENDPOINTS
+// EXISTING ENDPOINT - Send Inquiry
 // ============================================
 
-// Single endpoint for sending inquiry with files in same email
 app.post("/send-inquiry", upload.array("files", 5), async (req, res) => {
   const { name, email, phone, message } = req.body;
   const files = req.files || [];
@@ -662,17 +748,17 @@ app.post("/send-inquiry", upload.array("files", 5), async (req, res) => {
     `;
 
     const mailOptions = {
-      from: `"Bardawil Luxury Properties" <${process.env.SMTP_USER || "contact@bardawil-luxury-properties.com"}>`,
+      from: `"Bardawil Luxury Properties" <contact@bardawil-luxury-properties.com>`,
       to: "contact@bardawil-luxury-properties.com",
-      replyTo: email || process.env.SMTP_USER || "contact@bardawil-luxury-properties.com",
+      replyTo: email || "contact@bardawil-luxury-properties.com",
       subject: `New Inquiry from ${name}${files.length > 0 ? ` (with ${files.length} attachment${files.length > 1 ? 's' : ''})` : ''}`,
       html: emailContent,
       attachments: attachments
     };
 
-    console.log("📧 Sending email to contact@bardawil-luxury-properties.com");
+    console.log("📧 Sending inquiry email...");
     const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Email sent successfully:", info.messageId);
+    console.log("✅ Inquiry email sent:", info.messageId);
 
     res.status(200).json({ 
       success: true, 
@@ -695,7 +781,7 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
     smtp_host: process.env.SMTP_HOST || "mail.spacemail.com",
     smtp_port: process.env.SMTP_PORT || 587,
-    smtp_user: process.env.SMTP_USER || "contact@bardawil-luxury-properties.com"
+    smtp_user: "contact@bardawil-luxury-properties.com"
   });
 });
 
