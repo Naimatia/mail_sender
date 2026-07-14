@@ -1,4 +1,5 @@
-// server.js - Complete updated file with your email settings
+// server.js - Complete fixed file with proper CORS
+
 const express = require("express");
 const nodemailer = require("nodemailer");
 const cors = require("cors");
@@ -7,11 +8,108 @@ const path = require("path");
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// ============================================
+// FIXED CORS CONFIGURATION
+// ============================================
 
+// Define allowed origins
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://orbrex365.com',
+  'https://www.orbrex365.com',
+  'https://bardawil-luxury-properties.com',
+  'https://bardawil-luxury-properties.vercel.app',
+  'https://mail-sender-bardawil.vercel.app',
+  'https://*.vercel.app'
+];
+
+// CORS middleware with proper configuration
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is allowed
+    const isAllowed = allowedOrigins.some(allowed => {
+      // Handle wildcard subdomains
+      if (allowed.includes('*')) {
+        const pattern = '^' + allowed.replace('*', '.*') + '$';
+        return new RegExp(pattern).test(origin);
+      }
+      return allowed === origin;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn('CORS blocked for origin:', origin);
+      // For development, allow all origins
+      if (process.env.NODE_ENV === 'development') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Origin'],
+  credentials: true,
+  optionsSuccessStatus: 200,
+  preflightContinue: false
+}));
+
+// Handle preflight requests explicitly for all routes
+app.options('*', (req, res) => {
+  const origin = req.headers.origin || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  res.status(200).end();
+});
+
+// Middleware
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// ============================================
+// LOGGING MIDDLEWARE
+// ============================================
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'unknown'}`);
+  next();
+});
+
+// ============================================
+// HEALTH CHECK ENDPOINT
+// ============================================
+app.get("/health", (req, res) => {
+  res.status(200).json({ 
+    status: "OK", 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'production',
+    cors_enabled: true,
+    allowed_origins: allowedOrigins
+  });
+});
+
+// ============================================
+// TEST CORS ENDPOINT
+// ============================================
+app.get("/test-cors", (req, res) => {
+  res.json({ 
+    success: true, 
+    message: "CORS is working!", 
+    origin: req.headers.origin || 'no origin',
+    method: req.method
+  });
+});
+
+// ============================================
 // Configure multer for file uploads
+// ============================================
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -31,7 +129,9 @@ const upload = multer({
   }
 });
 
+// ============================================
 // Email transporter - Configured for Spacemail
+// ============================================
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "mail.spacemail.com",
   port: Number(process.env.SMTP_PORT) || 587,
@@ -781,7 +881,8 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
     smtp_host: process.env.SMTP_HOST || "mail.spacemail.com",
     smtp_port: process.env.SMTP_PORT || 587,
-    smtp_user: "contact@bardawil-luxury-properties.com"
+    smtp_user: "contact@bardawil-luxury-properties.com",
+    cors_enabled: true
   });
 });
 
