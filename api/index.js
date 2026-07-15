@@ -648,7 +648,7 @@ function generateMeetingEmail(meeting, recipient, action = 'created') {
         <div class="footer">
           <div class="company-name">🏢 Bardawil Luxury Properties</div>
           <div class="company-details">
-            📞 +971 4 123 4567 &nbsp;|&nbsp; 
+            📞 +971 54 206 5529 &nbsp;|&nbsp; 
             📧 <a href="mailto:contact@bardawil-luxury-properties.com">contact@bardawil-luxury-properties.com</a>
           </div>
           <div class="disclaimer">
