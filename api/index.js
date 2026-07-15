@@ -1,5 +1,3 @@
-// server.js - Complete fixed file with proper CORS
-
 const express = require("express");
 const nodemailer = require("nodemailer");
 const cors = require("cors");
@@ -17,17 +15,14 @@ app.disable('x-powered-by');
 
 // Custom CORS middleware that handles everything
 app.use((req, res, next) => {
-  // Get the origin from the request
   const origin = req.headers.origin || '*';
   
-  // Set CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Origin, X-CSRF-Token');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  res.setHeader('Access-Control-Max-Age', '86400');
   
-  // Handle preflight requests immediately
   if (req.method === 'OPTIONS') {
     console.log('🔄 OPTIONS request received for:', req.path);
     return res.status(200).end();
@@ -49,7 +44,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================
-// HEALTH CHECK ENDPOINT - MUST BE BEFORE ANY REDIRECT
+// HEALTH CHECK ENDPOINT
 // ============================================
 app.get("/health", (req, res) => {
   res.status(200).json({ 
@@ -62,7 +57,7 @@ app.get("/health", (req, res) => {
 });
 
 // ============================================
-// TEST CORS ENDPOINT - MUST BE BEFORE ANY REDIRECT
+// TEST CORS ENDPOINT
 // ============================================
 app.get("/test-cors", (req, res) => {
   res.status(200).json({ 
@@ -81,7 +76,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     files: 5,
-    fileSize: 10 * 1024 * 1024 // 10MB
+    fileSize: 10 * 1024 * 1024
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx/;
@@ -102,7 +97,7 @@ const upload = multer({
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "mail.spacemail.com",
   port: Number(process.env.SMTP_PORT) || 587,
-  secure: false, // false for 587 (STARTTLS)
+  secure: false,
   auth: {
     user: process.env.SMTP_USER || "contact@bardawil-luxury-properties.com",
     pass: process.env.SMTP_PASS || "Bardawil@2026",
@@ -132,7 +127,7 @@ transporter.verify((error, success) => {
 // ============================================
 
 /**
- * Send meeting notification to participants
+ * Send meeting notification to participants (supports multiple agents)
  */
 app.post("/send-meeting-notification", async (req, res) => {
   const { meeting, recipients, action = 'created' } = req.body;
@@ -140,6 +135,7 @@ app.post("/send-meeting-notification", async (req, res) => {
   console.log("📅 Sending meeting notification:", meeting.Title);
   console.log("📧 Recipients:", recipients.length);
   console.log("📌 Action:", action);
+  console.log("👥 Agents assigned:", meeting.assignedAgents || []);
 
   try {
     const results = [];
@@ -191,218 +187,12 @@ app.post("/send-meeting-notification", async (req, res) => {
   }
 });
 
-/**
- * Send meeting reminder notifications
- */
-app.post("/send-meeting-reminders", async (req, res) => {
-  const { meetings } = req.body;
-
-  console.log("⏰ Sending meeting reminders for", meetings.length, "meetings");
-
-  try {
-    const allResults = [];
-    
-    for (const meeting of meetings) {
-      const recipients = meeting.recipients || [];
-      
-      for (const recipient of recipients) {
-        try {
-          const emailContent = generateMeetingEmail(meeting, recipient, 'reminder');
-          
-          const mailOptions = {
-            from: `"Bardawil Luxury Properties" <contact@bardawil-luxury-properties.com>`,
-            to: recipient.email,
-            replyTo: "contact@bardawil-luxury-properties.com",
-            subject: emailContent.subject,
-            html: emailContent.html,
-            text: emailContent.text
-          };
-
-          console.log(`⏰ Sending reminder to: ${recipient.email}`);
-          const info = await transporter.sendMail(mailOptions);
-          allResults.push({
-            meetingId: meeting.id,
-            email: recipient.email,
-            success: true,
-            messageId: info.messageId
-          });
-        } catch (error) {
-          allResults.push({
-            meetingId: meeting.id,
-            email: recipient.email,
-            success: false,
-            error: error.message
-          });
-        }
-      }
-    }
-
-    res.status(200).json({
-      success: true,
-      message: `Reminders sent to ${allResults.filter(r => r.success).length} recipients`,
-      results: allResults
-    });
-  } catch (err) {
-    console.error("❌ Error sending meeting reminders:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to send meeting reminders",
-      error: err.message
-    });
-  }
-});
-
-/**
- * Send bulk meeting notifications (for multiple meetings)
- */
-app.post("/send-bulk-meeting-notifications", async (req, res) => {
-  const { notifications } = req.body;
-
-  console.log("📨 Sending bulk meeting notifications:", notifications.length);
-
-  try {
-    const allResults = [];
-    
-    for (const notification of notifications) {
-      const { meeting, recipients, action = 'created' } = notification;
-      
-      for (const recipient of recipients) {
-        try {
-          const emailContent = generateMeetingEmail(meeting, recipient, action);
-          
-          const mailOptions = {
-            from: `"Bardawil Luxury Properties" <contact@bardawil-luxury-properties.com>`,
-            to: recipient.email,
-            replyTo: "contact@bardawil-luxury-properties.com",
-            subject: emailContent.subject,
-            html: emailContent.html,
-            text: emailContent.text
-          };
-
-          console.log(`📨 Sending bulk to: ${recipient.email}`);
-          const info = await transporter.sendMail(mailOptions);
-          allResults.push({
-            meetingId: meeting.id,
-            email: recipient.email,
-            success: true,
-            messageId: info.messageId
-          });
-        } catch (error) {
-          allResults.push({
-            meetingId: meeting.id,
-            email: recipient.email,
-            success: false,
-            error: error.message
-          });
-        }
-      }
-    }
-
-    res.status(200).json({
-      success: true,
-      message: `Bulk notifications sent to ${allResults.filter(r => r.success).length} recipients`,
-      results: allResults
-    });
-  } catch (err) {
-    console.error("❌ Error sending bulk notifications:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to send bulk notifications",
-      error: err.message
-    });
-  }
-});
-
-/**
- * Send test email to verify configuration
- */
-app.post("/send-test-email", async (req, res) => {
-  const { to } = req.body;
-
-  console.log("🧪 Sending test email to:", to);
-
-  try {
-    const mailOptions = {
-      from: `"Bardawil Luxury Properties" <contact@bardawil-luxury-properties.com>`,
-      to: to || "atianaim@gmail.com",
-      replyTo: "contact@bardawil-luxury-properties.com",
-      subject: "✅ Test Email - Bardawil Luxury Properties",
-      html: `
-        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
-            <h1 style="margin: 0;">🏢 Bardawil Luxury Properties</h1>
-            <p style="margin: 5px 0 0; opacity: 0.9;">Meeting Notification System</p>
-          </div>
-          
-          <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
-            <h2 style="color: #1a1a2e; margin-top: 0;">✅ Test Email Successful!</h2>
-            <p>This is a test email to verify that the meeting notification system is working properly.</p>
-            
-            <div style="background: #e8f0fe; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 0; color: #2563eb;">
-                <strong>📧 From:</strong> contact@bardawil-luxury-properties.com<br>
-                <strong>📧 To:</strong> ${to || "atianaim@gmail.com"}<br>
-                <strong>🕐 Time:</strong> ${new Date().toLocaleString()}
-              </p>
-            </div>
-            
-            <p style="color: #666;">The meeting notification system is ready to send meeting invitations, updates, and reminders to your team.</p>
-            
-            <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107; margin-top: 20px;">
-              <p style="margin: 0; font-size: 14px; color: #856404;">
-                💡 Next steps: Create a meeting to send notifications to all participants.
-              </p>
-            </div>
-          </div>
-          
-          <div style="margin-top: 20px; text-align: center; color: #999; font-size: 12px; padding-top: 20px; border-top: 1px solid #eee;">
-            <p style="margin: 0;">© ${new Date().getFullYear()} Bardawil Luxury Properties</p>
-            <p style="margin: 0;">contact@bardawil-luxury-properties.com</p>
-          </div>
-        </div>
-      `,
-      text: `
-Test Email - Bardawil Luxury Properties
-
-This is a test email to verify that the meeting notification system is working properly.
-
-From: contact@bardawil-luxury-properties.com
-To: ${to || "atianaim@gmail.com"}
-Time: ${new Date().toLocaleString()}
-
-The meeting notification system is ready to send meeting invitations, updates, and reminders to your team.
-
----
-Bardawil Luxury Properties
-contact@bardawil-luxury-properties.com
-      `
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Test email sent:", info.messageId);
-
-    res.status(200).json({
-      success: true,
-      message: "Test email sent successfully",
-      messageId: info.messageId,
-      to: to || "atianaim@gmail.com"
-    });
-  } catch (err) {
-    console.error("❌ Error sending test email:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to send test email",
-      error: err.message
-    });
-  }
-});
-
 // ============================================
-// EMAIL GENERATION FUNCTIONS
+// EMAIL GENERATION FUNCTION - With Logo and Professional Template
 // ============================================
 
 /**
- * Generate meeting email content
+ * Generate meeting email content with logo and professional design
  */
 function generateMeetingEmail(meeting, recipient, action = 'created') {
   const meetingDate = new Date(meeting.DateTime);
@@ -438,10 +228,10 @@ function generateMeetingEmail(meeting, recipient, action = 'created') {
   };
 
   const actionColors = {
-    created: '#52c41a',
-    updated: '#1890ff',
-    deleted: '#ff4d4f',
-    reminder: '#faad14'
+    created: '#1a365d',
+    updated: '#2b6cb0',
+    deleted: '#e53e3e',
+    reminder: '#d69e2e'
   };
 
   const subject = `${actionEmojis[action] || '📅'} ${meeting.Title} - ${actionMessages[action]}`;
@@ -450,197 +240,388 @@ function generateMeetingEmail(meeting, recipient, action = 'created') {
   const otherParticipants = (recipient.otherParticipants || [])
     .filter(p => p !== recipient.name);
 
+  // Get assigned agents
+  const assignedAgents = meeting.assignedAgents || [];
+
+  // Logo as base64 or URL - Using a professional placeholder
+  // Replace with your actual logo URL or base64
+  const logoUrl = meeting.logoUrl || 'https://res.cloudinary.com/danzhiaqf/image/upload/v1772995834/obrex365/companies/k9SquTLadNkzlBOHfPkb/FINAL_BARDAWIL_APPROVED_LOGO_nynva6.png';
+  
+  // If you have a base64 logo, use this format:
+  // const logoBase64 = 'data:image/png;base64,<your-base64-here>';
+
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Meeting Notification</title>
       <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        body { 
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          line-height: 1.6;
+          color: #2d3748;
+          background: #f7fafc;
+          margin: 0;
+          padding: 20px;
+        }
+        .container { 
+          max-width: 650px; 
+          margin: 0 auto; 
+          background: #ffffff;
+          border-radius: 16px;
+          overflow: hidden;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+        }
         .header { 
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-          color: white;
-          padding: 30px;
-          border-radius: 12px 12px 0 0;
+          background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 50%, #2c5282 100%);
+          padding: 30px 40px 25px;
           text-align: center;
+          position: relative;
         }
-        .header h1 { margin: 0; font-size: 24px; }
-        .header p { margin: 5px 0 0; opacity: 0.9; font-size: 14px; }
+        .header-logo {
+          max-width: 180px;
+          height: auto;
+          margin-bottom: 10px;
+        }
+        .header h1 { 
+          color: #ffffff;
+          font-size: 22px;
+          font-weight: 600;
+          margin: 5px 0 0;
+          letter-spacing: 0.5px;
+        }
+        .header .subtitle {
+          color: rgba(255,255,255,0.85);
+          font-size: 14px;
+          margin-top: 4px;
+          font-weight: 300;
+        }
+        .header-decoration {
+          position: absolute;
+          bottom: -2px;
+          left: 0;
+          right: 0;
+          height: 4px;
+          background: linear-gradient(90deg, #ed8936, #ecc94b, #ed8936);
+        }
         .content { 
-          background: #f8f9fa;
-          padding: 30px;
-          border-radius: 0 0 12px 12px;
+          padding: 35px 40px 30px;
         }
-        .meeting-details {
-          background: white;
-          padding: 25px;
-          border-radius: 10px;
-          margin: 20px 0;
-          border-left: 4px solid ${actionColors[action] || '#1890ff'};
-          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        .greeting {
+          font-size: 16px;
+          color: #2d3748;
+          margin-bottom: 4px;
         }
-        .meeting-details h2 { 
-          margin: 0 0 15px; 
-          color: #1a1a2e;
+        .greeting-name {
+          font-weight: 600;
+          color: #1a365d;
+        }
+        .meeting-title-section {
+          background: #ebf8ff;
+          padding: 20px 24px;
+          border-radius: 12px;
+          margin: 16px 0 20px;
+          border-left: 4px solid #2b6cb0;
+        }
+        .meeting-title-section h2 {
+          color: #1a365d;
           font-size: 20px;
+          margin: 0;
+          font-weight: 600;
         }
-        .detail-grid {
-          display: grid;
-          grid-template-columns: 120px 1fr;
-          gap: 12px 8px;
-        }
-        .detail-label { 
-          font-weight: 600; 
-          color: #666;
-          font-size: 14px;
-        }
-        .detail-value { 
-          color: #1a1a2e;
-          font-size: 14px;
-        }
-        .detail-value a { color: #1890ff; text-decoration: none; }
-        .detail-value a:hover { text-decoration: underline; }
-        .badge {
+        .meeting-title-section .action-tag {
           display: inline-block;
-          padding: 4px 12px;
+          background: ${actionColors[action] || '#2b6cb0'};
+          color: white;
+          padding: 2px 14px;
           border-radius: 20px;
           font-size: 12px;
           font-weight: 600;
-          color: white;
-          background: ${actionColors[action] || '#1890ff'};
+          margin-top: 6px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
+        .meeting-details {
+          background: #f7fafc;
+          padding: 24px;
+          border-radius: 12px;
+          margin: 20px 0;
+        }
+        .detail-row {
+          display: flex;
+          padding: 8px 0;
+          border-bottom: 1px solid #edf2f7;
+        }
+        .detail-row:last-child {
+          border-bottom: none;
+        }
+        .detail-icon {
+          width: 28px;
+          color: #4a5568;
+          font-size: 16px;
+        }
+        .detail-label {
+          width: 100px;
+          font-weight: 600;
+          color: #4a5568;
+          font-size: 14px;
+        }
+        .detail-value {
+          flex: 1;
+          color: #2d3748;
+          font-size: 14px;
+        }
+        .detail-value a {
+          color: #2b6cb0;
+          text-decoration: none;
+        }
+        .detail-value a:hover {
+          text-decoration: underline;
+        }
+        .badge {
+          display: inline-block;
+          padding: 2px 12px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 600;
+        }
+        .badge-pending { background: #fefcbf; color: #975a16; }
+        .badge-confirmed { background: #c6f6d5; color: #22543d; }
+        .badge-cancelled { background: #fed7d7; color: #9b2c2c; }
+        .badge-completed { background: #bee3f8; color: #2a4365; }
+        
         .participants-section {
           margin: 20px 0;
         }
+        .participants-section h4 {
+          color: #1a365d;
+          font-size: 15px;
+          margin-bottom: 8px;
+        }
         .participants-list {
-          background: #f5f5f5;
-          padding: 15px 20px;
+          background: #f7fafc;
+          padding: 12px 16px;
           border-radius: 8px;
         }
         .participant-item {
-          padding: 6px 0;
+          padding: 4px 0;
           display: flex;
           align-items: center;
           gap: 8px;
-        }
-        .participant-item:before {
-          content: "👤";
+          font-size: 14px;
         }
         .participant-item.highlight {
-          background: #e6f7ff;
+          background: #ebf8ff;
           padding: 6px 12px;
           border-radius: 6px;
-          margin: 4px 0;
+          margin: 2px 0;
         }
-        .participant-item.highlight:before {
-          content: "⭐";
+        .participant-item .role-tag {
+          background: #e2e8f0;
+          padding: 0 8px;
+          border-radius: 4px;
+          font-size: 11px;
+          color: #4a5568;
         }
-        .button {
+        .agents-section {
+          margin: 16px 0 20px;
+          padding: 16px 20px;
+          background: #f0fff4;
+          border-radius: 8px;
+          border: 1px solid #c6f6d5;
+        }
+        .agents-section h4 {
+          color: #22543d;
+          font-size: 14px;
+          margin-bottom: 4px;
+        }
+        .agents-section .agent-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px 12px;
+        }
+        .agents-section .agent-tag {
+          background: #e6fffa;
+          padding: 2px 12px;
+          border-radius: 12px;
+          font-size: 13px;
+          color: #234e52;
+        }
+        .meeting-link-btn {
           display: inline-block;
-          background: #1890ff;
+          background: #2b6cb0;
           color: white !important;
-          padding: 12px 30px;
+          padding: 12px 36px;
+          border-radius: 8px;
           text-decoration: none;
-          border-radius: 6px;
-          margin: 20px 0;
           font-weight: 600;
+          margin: 16px 0 8px;
           transition: background 0.3s;
         }
-        .button:hover { background: #096dd9; }
-        .footer { 
-          margin-top: 30px;
-          text-align: center;
-          color: #999;
-          font-size: 12px;
-          padding-top: 20px;
-          border-top: 1px solid #eee;
+        .meeting-link-btn:hover {
+          background: #1a365d;
         }
-        .company-logo {
+        .note-box {
+          background: #fffbeb;
+          padding: 14px 20px;
+          border-radius: 8px;
+          border-left: 4px solid #d69e2e;
+          margin-top: 20px;
+        }
+        .note-box p {
+          margin: 0;
+          font-size: 14px;
+          color: #744210;
+        }
+        .description-box {
+          background: white;
+          padding: 16px 20px;
+          border-radius: 8px;
+          margin: 16px 0;
+          border: 1px solid #e2e8f0;
+        }
+        .description-box p {
+          margin: 0;
+          color: #4a5568;
+          font-size: 14px;
+          white-space: pre-wrap;
+        }
+        .footer { 
+          background: #f7fafc;
+          padding: 25px 40px;
+          text-align: center;
+          border-top: 1px solid #e2e8f0;
+        }
+        .footer .company-name {
           font-size: 16px;
           font-weight: 700;
-          color: #1a1a2e;
+          color: #1a365d;
         }
-        .action-badge {
-          display: inline-block;
-          padding: 6px 16px;
-          border-radius: 20px;
+        .footer .company-details {
+          color: #718096;
           font-size: 13px;
-          font-weight: 600;
-          color: white;
-          background: ${actionColors[action] || '#1890ff'};
-          margin-left: 10px;
+          margin: 4px 0;
+        }
+        .footer .company-details a {
+          color: #2b6cb0;
+          text-decoration: none;
+        }
+        .footer .disclaimer {
+          color: #a0aec0;
+          font-size: 11px;
+          margin-top: 8px;
+        }
+        .footer .social-links {
+          margin-top: 10px;
+        }
+        .footer .social-links a {
+          color: #4a5568;
+          text-decoration: none;
+          margin: 0 8px;
+          font-size: 14px;
         }
         @media (max-width: 480px) {
-          .detail-grid {
-            grid-template-columns: 1fr;
-            gap: 4px;
-          }
-          .detail-label {
-            font-weight: 700;
-            margin-top: 8px;
-          }
+          .header { padding: 20px; }
+          .content { padding: 20px; }
+          .footer { padding: 20px; }
+          .detail-row { flex-wrap: wrap; }
+          .detail-label { width: 100%; margin-bottom: 2px; }
+          .detail-value { width: 100%; }
+          .meeting-title-section h2 { font-size: 17px; }
         }
       </style>
     </head>
     <body>
       <div class="container">
+        <!-- HEADER WITH LOGO -->
         <div class="header">
-          <h1>🏢 Bardawil Luxury Properties</h1>
-          <p>Meeting Notification</p>
+          <!-- Replace the src with your actual logo URL or base64 -->
+          <img src="${logoUrl}" alt="Bardawil Luxury Properties" class="header-logo" style="max-width:180px;height:auto;background:white;padding:8px 16px;border-radius:8px;" onerror="this.style.display='none'">
+          <h1>Bardawil Luxury Properties</h1>
+          <div class="header-decoration"></div>
         </div>
         
+        <!-- CONTENT -->
         <div class="content">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h2 style="margin: 0;">${escapeHtml(meeting.Title)}</h2>
-            <span class="action-badge">${action.toUpperCase()}</span>
+          <p class="greeting">Dear <span class="greeting-name">${escapeHtml(recipient.name)}</span>,</p>
+          
+          <div class="meeting-title-section">
+            <h2>${escapeHtml(meeting.Title)}</h2>
+            <span class="action-tag">${action.toUpperCase()}</span>
           </div>
           
-          <p style="color: #666; margin-top: 0;">
-            Dear ${escapeHtml(recipient.name)},
-          </p>
-          <p>
+          <p style="margin-bottom: 8px;">
             A meeting <strong>"${escapeHtml(meeting.Title)}"</strong> ${actionMessages[action]}.
           </p>
           
+          <!-- MEETING DETAILS -->
           <div class="meeting-details">
-            <div class="detail-grid">
-              <div class="detail-label">📅 Date & Time</div>
-              <div class="detail-value">${formattedDate}</div>
-              
-              <div class="detail-label">⏱️ Duration</div>
-              <div class="detail-value">${meeting.Duration || 60} minutes (until ${formattedEndTime})</div>
-              
-              <div class="detail-label">📌 Status</div>
-              <div class="detail-value"><span class="badge">${meeting.Status || 'Pending'}</span></div>
-              
-              ${meeting.Type === 'online' ? `
-                <div class="detail-label">🔗 Meeting Link</div>
-                <div class="detail-value">
-                  <a href="${escapeHtml(meeting.MeetLink)}" target="_blank">${escapeHtml(meeting.MeetLink)}</a>
-                </div>
-              ` : `
-                <div class="detail-label">📍 Location</div>
-                <div class="detail-value">Bardawil Luxury Properties Office</div>
-              `}
+            <div class="detail-row">
+              <span class="detail-icon">📅</span>
+              <span class="detail-label">Date & Time</span>
+              <span class="detail-value">${formattedDate}</span>
             </div>
+            <div class="detail-row">
+              <span class="detail-icon">⏱️</span>
+              <span class="detail-label">Duration</span>
+              <span class="detail-value">${meeting.Duration || 60} minutes (until ${formattedEndTime})</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-icon">📌</span>
+              <span class="detail-label">Status</span>
+              <span class="detail-value">
+                <span class="badge badge-${(meeting.Status || 'Pending').toLowerCase()}">${meeting.Status || 'Pending'}</span>
+              </span>
+            </div>
+            ${meeting.Type === 'online' ? `
+              <div class="detail-row">
+                <span class="detail-icon">🔗</span>
+                <span class="detail-label">Meeting Link</span>
+                <span class="detail-value">
+                  <a href="${escapeHtml(meeting.MeetLink)}" target="_blank">${escapeHtml(meeting.MeetLink)}</a>
+                </span>
+              </div>
+            ` : `
+              <div class="detail-row">
+                <span class="detail-icon">📍</span>
+                <span class="detail-label">Location</span>
+                <span class="detail-value">Bardawil Luxury Properties Office, Dubai</span>
+              </div>
+            `}
           </div>
           
-          ${meeting.Description ? `
-            <div style="margin: 20px 0;">
-              <strong style="color: #1a1a2e;">📋 Description:</strong>
-              <div style="background: white; padding: 15px; border-radius: 8px; margin-top: 8px; color: #555;">
-                ${escapeHtml(meeting.Description).replace(/\n/g, "<br>")}
+          <!-- ASSIGNED AGENTS SECTION -->
+          ${assignedAgents.length > 0 ? `
+            <div class="agents-section">
+              <h4>🏅 Assigned Agents</h4>
+              <div class="agent-list">
+                ${assignedAgents.map(agent => `
+                  <span class="agent-tag">${escapeHtml(agent)}</span>
+                `).join('')}
               </div>
             </div>
           ` : ''}
           
+          <!-- DESCRIPTION -->
+          ${meeting.Description ? `
+            <div class="description-box">
+              <p>${escapeHtml(meeting.Description).replace(/\n/g, "<br>")}</p>
+            </div>
+          ` : ''}
+          
+          <!-- PARTICIPANTS -->
           <div class="participants-section">
-            <strong style="color: #1a1a2e;">👥 Participants:</strong>
+            <h4>👥 Participants</h4>
             <div class="participants-list">
               <div class="participant-item highlight">
-                <strong>${escapeHtml(recipient.name)}</strong> (You)
+                <strong>${escapeHtml(recipient.name)}</strong> <span class="role-tag">You</span>
               </div>
               ${otherParticipants.length > 0 ? otherParticipants.map(p => `
                 <div class="participant-item">${escapeHtml(p)}</div>
@@ -648,33 +629,33 @@ function generateMeetingEmail(meeting, recipient, action = 'created') {
             </div>
           </div>
           
+          <!-- MEETING LINK BUTTON -->
           ${meeting.Type === 'online' && meeting.MeetLink ? `
-            <div style="text-align: center; margin: 25px 0;">
-              <a href="${escapeHtml(meeting.MeetLink)}" class="button" target="_blank">
+            <div style="text-align: center;">
+              <a href="${escapeHtml(meeting.MeetLink)}" class="meeting-link-btn" target="_blank">
                 🚀 Join Meeting
               </a>
             </div>
           ` : ''}
           
-          <div style="background: #fff3cd; padding: 15px 20px; border-radius: 8px; border-left: 4px solid #ffc107; margin-top: 20px;">
-            <p style="margin: 0; font-size: 14px; color: #856404;">
-              💡 Please ensure you are available at the scheduled time. 
-              If you have any conflicts, please contact the meeting organizer.
-            </p>
+          <!-- NOTE BOX -->
+          <div class="note-box">
+            <p>💡 Please ensure you are available at the scheduled time. If you have any conflicts, please contact the meeting organizer.</p>
           </div>
         </div>
         
+        <!-- FOOTER -->
         <div class="footer">
-          <div class="company-logo">🏢 Bardawil Luxury Properties</div>
-          <p style="margin: 5px 0;">
-            Contact: <a href="mailto:contact@bardawil-luxury-properties.com" style="color: #1890ff;">contact@bardawil-luxury-properties.com</a>
-          </p>
-          <p style="margin: 5px 0; font-size: 11px; color: #bbb;">
+          <div class="company-name">🏢 Bardawil Luxury Properties</div>
+          <div class="company-details">
+            📞 +971 4 123 4567 &nbsp;|&nbsp; 
+            📧 <a href="mailto:contact@bardawil-luxury-properties.com">contact@bardawil-luxury-properties.com</a>
+          </div>
+          <div class="disclaimer">
             This is an automated notification, please do not reply to this email.
-          </p>
-          <p style="margin: 5px 0; font-size: 11px; color: #bbb;">
+            <br>
             © ${new Date().getFullYear()} Bardawil Luxury Properties. All rights reserved.
-          </p>
+          </div>
         </div>
       </div>
     </body>
@@ -683,7 +664,8 @@ function generateMeetingEmail(meeting, recipient, action = 'created') {
 
   // Plain text version
   const text = `
-Meeting Notification: ${meeting.Title}
+Bardawil Luxury Properties - Meeting Notification
+==================================================
 
 Dear ${recipient.name},
 
@@ -693,7 +675,8 @@ Meeting Details:
 - Date & Time: ${formattedDate}
 - Duration: ${meeting.Duration || 60} minutes (until ${formattedEndTime})
 - Status: ${meeting.Status || 'Pending'}
-${meeting.Type === 'online' ? `- Meeting Link: ${meeting.MeetLink}` : '- Location: Bardawil Luxury Properties Office'}
+${meeting.Type === 'online' ? `- Meeting Link: ${meeting.MeetLink}` : '- Location: Bardawil Luxury Properties Office, Dubai'}
+${assignedAgents.length > 0 ? `\nAssigned Agents: ${assignedAgents.join(', ')}` : ''}
 ${meeting.Description ? `\nDescription:\n${meeting.Description}` : ''}
 
 Participants:
@@ -704,7 +687,9 @@ ${meeting.Type === 'online' && meeting.MeetLink ? `\nJoin the meeting: ${meeting
 
 ---
 Bardawil Luxury Properties
+Dubai, United Arab Emirates
 contact@bardawil-luxury-properties.com
+© ${new Date().getFullYear()} Bardawil Luxury Properties. All rights reserved.
   `;
 
   return { subject, html, text };
